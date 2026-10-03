@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+.env
+docs/local-admin-access.md
+.venv/
+venv/
+backend/.venv/
+
+# Django
+*.log
+*.pot
+*.pyc
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
