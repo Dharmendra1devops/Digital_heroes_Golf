@@ -1,6 +1,7 @@
 from django.urls import path
 
 from apps.winners.views import (
+    AdminPayoutDetailView,
     AdminPayoutListView,
     AdminWinnerListView,
     AdminWinnerProofReviewView,
@@ -18,5 +19,5 @@ urlpatterns = [
     path('admin/proofs/<uuid:proof_id>/signed-url/', AdminWinnerProofSignedUrlView.as_view(), name='admin-proof-url'),
     path('admin/proofs/<uuid:proof_id>/review/', AdminWinnerProofReviewView.as_view(), name='admin-proof-review'),
     path('admin/payouts/', AdminPayoutListView.as_view(), name='admin-payouts'),
-    path('admin/payouts/<uuid:payout_id>/', AdminPayoutListView.as_view(), name='admin-payout-update'),
+    path('admin/payouts/<uuid:payout_id>/', AdminPayoutDetailView.as_view(), name='admin-payout-update'),
 ]

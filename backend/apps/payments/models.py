@@ -86,6 +86,7 @@ class Donation(UUIDTimeStampedModel):
         blank=True,
     )
     charity = models.ForeignKey('charities.Charity', on_delete=models.PROTECT, related_name='donations')
+    stripe_checkout_session_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
     stripe_payment_intent_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
     amount_minor = models.PositiveBigIntegerField()
     currency = models.CharField(max_length=3)

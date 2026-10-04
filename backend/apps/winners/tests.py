@@ -1,6 +1,8 @@
 import os
+import json
 from datetime import timedelta
 from unittest.mock import patch
+from urllib.request import Request
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -10,6 +12,7 @@ from django.utils import timezone
 from apps.draws.models import Draw, DrawConfiguration, DrawEntry
 from apps.subscriptions.models import Subscription, SubscriptionPlan
 from apps.winners.models import DrawWinner, Payout, WinnerProof
+from apps.winners.services import create_signed_proof_url, store_winner_proof
 
 
 class WinnerApiTests(TestCase):
@@ -87,6 +90,42 @@ class WinnerApiTests(TestCase):
         self.assertEqual(response.json()['code'], 'storage_not_configured')
         self.assertEqual(WinnerProof.objects.filter(winner=self.winner).count(), 1)
 
+    @patch('apps.winners.services.urlopen')
+    def test_proof_upload_uses_the_configured_bearer_key(self, urlopen):
+        upload = SimpleUploadedFile(
+            'proof.png',
+            b'\x89PNG\r\n\x1a\n' + b'proof-content',
+            content_type='image/png',
+        )
+        with patch.dict(os.environ, {
+            'SUPABASE_URL': 'https://storage.example.invalid',
+            'SUPABASE_SERVICE_ROLE_KEY': 'test-storage-key',
+        }):
+            store_winner_proof(upload, self.winner.pk)
+
+        request = urlopen.call_args.args[0]
+        self.assertIsInstance(request, Request)
+        self.assertEqual(request.get_header('Authorization'), 'Bearer test-storage-key')
+        self.assertEqual(request.get_header('Apikey'), 'test-storage-key')
+
+    @patch('apps.winners.services.urlopen')
+    def test_signed_proof_url_uses_the_configured_bearer_key(self, urlopen):
+        urlopen.return_value.__enter__.return_value.read.return_value = json.dumps({
+            'signedURL': '/object/sign/winner-proofs/proof.png?token=temporary',
+        }).encode()
+        with patch.dict(os.environ, {
+            'SUPABASE_URL': 'https://storage.example.invalid',
+            'SUPABASE_SERVICE_ROLE_KEY': 'test-storage-key',
+        }):
+            signed_url = create_signed_proof_url(self.proof)
+
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.get_header('Authorization'), 'Bearer test-storage-key')
+        self.assertEqual(
+            signed_url,
+            'https://storage.example.invalid/storage/v1/object/sign/winner-proofs/proof.png?token=temporary',
+        )
+
     def test_admin_proof_preview_fails_closed_until_storage_is_configured(self):
         self.client.force_login(self.admin)
         with patch.dict(os.environ, {'SUPABASE_URL': '', 'SUPABASE_SERVICE_ROLE_KEY': ''}):
@@ -116,6 +155,10 @@ class WinnerApiTests(TestCase):
 
     def test_payout_requires_approved_winner_and_provider_reference(self):
         self.client.force_login(self.admin)
+        listing = self.client.get('/api/winners/admin/payouts/')
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(len(listing.json()), 1)
+
         url = f'/api/winners/admin/payouts/{self.payout.pk}/'
         denied = self.client.patch(
             url,

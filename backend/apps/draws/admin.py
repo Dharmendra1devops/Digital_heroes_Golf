@@ -18,7 +18,16 @@ class DrawPrizeTierInline(admin.TabularInline):
 class DrawTierPoolInline(admin.TabularInline):
     model = DrawTierPool
     extra = 0
-    readonly_fields = ('available_minor', 'rollover_in_minor', 'rollover_out_minor')
+    readonly_fields = tuple(field.name for field in DrawTierPool._meta.fields)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(DrawConfiguration)
@@ -35,6 +44,21 @@ class DrawAdmin(admin.ModelAdmin):
     ordering = ('-scheduled_at',)
     inlines = (DrawTierPoolInline,)
     readonly_fields = ('configuration_snapshot', 'published_at', 'created_at', 'updated_at')
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = super().get_readonly_fields(request, obj)
+        if obj and obj.status == Draw.Status.PUBLISHED:
+            return (*fields, 'configuration', 'scheduled_at', 'eligibility_cutoff', 'status')
+        return fields
+
+    def formfield_for_choice_field(self, db_field, request, **kwargs):
+        if db_field.name == 'status':
+            kwargs['choices'] = [
+                (value, label)
+                for value, label in Draw.Status.choices
+                if value != Draw.Status.PUBLISHED
+            ]
+        return super().formfield_for_choice_field(db_field, request, **kwargs)
 
 
 @admin.register(DrawRun)

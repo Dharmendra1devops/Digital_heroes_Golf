@@ -121,6 +121,10 @@ class AdminPayoutListView(APIView):
         payouts = Payout.objects.select_related('winner').order_by('-created_at')
         return Response(PayoutSerializer(payouts, many=True).data)
 
+
+class AdminPayoutDetailView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
     @transaction.atomic
     def patch(self, request, payout_id):
         payout = get_object_or_404(Payout.objects.select_for_update().select_related('winner'), pk=payout_id)
