@@ -1,10 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
 import {
-  ArrowLeft, ArrowRight, ExternalLink, HeartHandshake, LoaderCircle,
-  Plus, ShieldCheck, Trash2,
+  ArrowRight, HeartHandshake, LoaderCircle, Plus, ShieldCheck, Trash2,
 } from "lucide-react";
 
 import {
@@ -12,7 +10,6 @@ import {
   createAdminCharity,
   deleteAdminCharity,
   getAdminCharities,
-  getCurrentAccount,
   updateAdminCharity,
   type AdminCharity,
 } from "@/lib/api";
@@ -20,11 +17,11 @@ import {
 export function AdminCharities() {
   const [items, setItems] = useState<AdminCharity[]>([]);
   const [loading, setLoading] = useState(true);
-  const [authorized, setAuthorized] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -34,24 +31,11 @@ export function AdminCharities() {
 
   useEffect(() => {
     let active = true;
-    getCurrentAccount()
-      .then(async ({ user }) => {
-        if (!active) return;
-        if (!user.is_admin) {
-          setAuthorized(false);
-          return;
-        }
-        setAuthorized(true);
-        const charities = await getAdminCharities();
-        if (active) setItems(charities);
-      })
+    getAdminCharities()
+      .then((charities) => { if (active) setItems(charities); })
       .catch((cause: unknown) => {
         if (!active) return;
-        if (cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) {
-          setError("Sign in with an administrator account to access this page.");
-          return;
-        }
-        setError("The charity manager is temporarily unavailable.");
+        setError(cause instanceof ApiError ? cause.message : "The charity manager is temporarily unavailable.");
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -115,16 +99,34 @@ export function AdminCharities() {
     }
   }
 
+  async function saveCharity(event: FormEvent<HTMLFormElement>, charity: AdminCharity) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const updated = await updateAdminCharity(charity.id, {
+        slug: String(data.get("slug")).trim(),
+        name: String(data.get("name")).trim(),
+        description: String(data.get("description")).trim(),
+        website: String(data.get("website")).trim(),
+        image_path: String(data.get("image_path")).trim(),
+      });
+      setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setEditingId(null);
+      setMessage("Cause details updated.");
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : "Cause details could not be updated.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) return <main className="dashboard-loading"><div><span className="loading-mark"><HeartHandshake size={18} /></span>Loading directory records…</div></main>;
-  if (!authorized) return <main className="dashboard-loading"><div className="admin-denied"><ShieldCheck size={25} /><h1>Administrator access required</h1><p>{error || "This area is limited to staff accounts."}</p><Link className="button button--forest" href="/dashboard">Return to member space <ArrowRight size={15} /></Link></div></main>;
 
   return (
-    <main className="admin-shell">
-      <header className="admin-topbar">
-        <Link className="brand-lockup" href="/dashboard"><span className="brand-mark"><HeartHandshake size={18} /></span><span>digital<span className="brand-lockup__light">heroes</span></span></Link>
-        <nav><Link href="/dashboard"><ArrowLeft size={15} /> Member space</Link><Link href="/admin/plans">Membership plans <ArrowRight size={14} /></Link><Link href="/admin/draws">Draw operations <ArrowRight size={14} /></Link><Link href="/admin/winners">Winners & payouts <ArrowRight size={14} /></Link><Link href="/charities" target="_blank">View public directory <ExternalLink size={14} /></Link></nav>
-      </header>
-      <section className="admin-content">
+    <>
         <div className="admin-heading">
           <div><p className="eyebrow">Administrator / charities</p><h1>Cause directory</h1><p>{items.length} {items.length === 1 ? "listing" : "listings"}</p></div>
           <span className="membership-tag membership-tag--active"><ShieldCheck size={14} /> Staff access</span>
@@ -148,8 +150,8 @@ export function AdminCharities() {
               <label className="field-label" htmlFor="charity-website">Website
                 <input className="field-input" id="charity-website" type="url" value={website} onChange={(event) => setWebsite(event.target.value)} placeholder="https://" />
               </label>
-              <label className="field-label" htmlFor="charity-image">Image object path
-                <input className="field-input" id="charity-image" value={imagePath} onChange={(event) => setImagePath(event.target.value)} placeholder="charities/example/cover.webp" />
+              <label className="field-label" htmlFor="charity-image">Public image URL
+                <input className="field-input" id="charity-image" type="url" value={imagePath} onChange={(event) => setImagePath(event.target.value)} placeholder="https://…" />
               </label>
               <label className="admin-check" htmlFor="charity-featured"><input id="charity-featured" type="checkbox" checked={featured} onChange={(event) => setFeatured(event.target.checked)} /> Feature in directory</label>
               <button className="button button--forest" type="submit" disabled={busy || !name || !slug}>{busy ? <LoaderCircle className="spin" size={16} /> : <>Add to directory <ArrowRight size={15} /></>}</button>
@@ -163,12 +165,25 @@ export function AdminCharities() {
                 <div className="admin-charity-row__main"><span className="account-avatar"><HeartHandshake size={16} /></span><div><strong>{charity.name}</strong><span>/{charity.slug}</span></div></div>
                 <label className="admin-check"><input type="checkbox" checked={charity.is_active} onChange={() => toggleCharity(charity, "is_active")} /> Active</label>
                 <label className="admin-check"><input type="checkbox" checked={charity.is_featured} onChange={() => toggleCharity(charity, "is_featured")} /> Featured</label>
-                {confirmDelete === charity.id ? <span className="inline-confirm"><span>Remove?</span><button type="button" disabled={busy} onClick={() => removeCharity(charity.id)}>Yes</button><button type="button" onClick={() => setConfirmDelete(null)}>No</button></span> : <button className="icon-action icon-action--danger" type="button" onClick={() => setConfirmDelete(charity.id)} aria-label={`Delete ${charity.name}`} title="Delete charity"><Trash2 size={15} /></button>}
+                <div className="admin-charity-row__actions">
+                  <button className="button button--outline button--small" type="button" onClick={() => { setEditingId(editingId === charity.id ? null : charity.id); setConfirmDelete(null); }}>{editingId === charity.id ? "Close edit" : "Edit"}</button>
+                  {confirmDelete === charity.id ? <span className="inline-confirm"><span>Remove?</span><button type="button" disabled={busy} onClick={() => removeCharity(charity.id)}>Yes</button><button type="button" onClick={() => setConfirmDelete(null)}>No</button></span> : <button className="icon-action icon-action--danger" type="button" onClick={() => { setConfirmDelete(charity.id); setEditingId(null); }} aria-label={`Delete ${charity.name}`} title="Delete charity"><Trash2 size={15} /></button>}
+                </div>
+                {editingId === charity.id && (
+                  <form className="admin-charity-edit" onSubmit={(event) => saveCharity(event, charity)}>
+                    <label className="field-label">Name<input className="field-input" name="name" defaultValue={charity.name} maxLength={180} required /></label>
+                    <label className="field-label">Directory slug<input className="field-input" name="slug" defaultValue={charity.slug} maxLength={160} pattern="[a-zA-Z0-9_-]+" required /></label>
+                    <label className="field-label">Description<textarea className="field-input admin-textarea" name="description" defaultValue={charity.description} rows={3} /></label>
+                    <label className="field-label">Website<input className="field-input" name="website" type="url" defaultValue={charity.website} placeholder="https://" /></label>
+                    <label className="field-label">Public image URL<input className="field-input" name="image_path" defaultValue={charity.image_path} placeholder="https://…" /></label>
+                    <button className="button button--forest button--small" type="submit" disabled={busy}>{busy ? <LoaderCircle className="spin" size={15} /> : "Save cause details"}</button>
+                  </form>
+                )}
               </article>
             ))}</div> : <div className="score-empty"><HeartHandshake size={21} /><p>No directory listings yet.</p></div>}
+            <p className="auth-form__hint">Upcoming events are managed from the Charity Events section in Django admin.</p>
           </section>
         </div>
-      </section>
-    </main>
+    </>
   );
 }

@@ -85,6 +85,67 @@ export type DrawRecord = {
   status: "draft" | "simulated" | "published" | "cancelled";
   configuration_snapshot: Record<string, unknown>;
   published_at: string | null;
+  winning_numbers: number[];
+  prize_pools: Array<{
+    match_count: number;
+    share_bps: number;
+    available_minor: number;
+    rollover_in_minor: number;
+    rollover_out_minor: number;
+    currency: string;
+  }>;
+};
+
+export type MemberDrawSummary = {
+  draws_entered: number;
+  upcoming_draws: Array<{
+    id: string;
+    scheduled_at: string;
+    entered: boolean;
+  }>;
+  winnings_by_currency: Array<{ currency: string; amount_minor: number }>;
+  payouts_by_status: Array<{
+    status: "pending" | "paid" | "failed";
+    currency: string;
+    amount_minor: number;
+    count: number;
+  }>;
+};
+
+export type DonationConfig = {
+  currency: string;
+  minimum_minor: number;
+  maximum_minor: number;
+  checkout_available: boolean;
+};
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  display_name: string;
+  is_active: boolean;
+  date_joined: string;
+  is_admin: boolean;
+  subscriptions: Array<{
+    id: string;
+    plan_interval: "monthly" | "yearly";
+    status: string;
+    current_period_start: string | null;
+    current_period_end: string | null;
+    cancel_at_period_end: boolean;
+  }>;
+  scores: Array<{ id: string; score_date: string; score: number }>;
+};
+
+export type AdminOverview = {
+  total_users: number;
+  active_subscribers: number;
+  prize_funding_by_currency: Array<{ currency: string; amount_minor: number }>;
+  charity_contributions_by_currency: Array<{ currency: string; amount_minor: number }>;
+  draws_by_status: Array<{ status: string; count: number }>;
+  distributed_pools_by_currency: Array<{ currency: string; distributed_minor: number }>;
+  top_charities: Array<{ id: string; name: string; donations__currency: string; donation_total_minor: number }>;
+  total_winners: number;
 };
 
 export type DrawRun = {
@@ -98,6 +159,10 @@ export type DrawRun = {
     winning_numbers: number[];
     eligible_entry_count: number;
     matches: Array<{ entry_id: string; match_count: number }>;
+    currency?: string;
+    total_pool_minor?: number;
+    winner_count?: number;
+    prize_pools?: DrawRecord["prize_pools"];
   };
   audit_metadata: Record<string, unknown>;
   is_published: boolean;
@@ -215,7 +280,67 @@ export function getCurrentAccount() {
   return request<{ user: Account }>("/api/auth/me/");
 }
 
-export function registerAccount(input: { email: string; display_name: string; password: string }) {
+export function updateMyProfile(input: { display_name: string }) {
+  return request<{ user: Account }>("/api/auth/me/", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function changeMyPassword(input: { current_password: string; new_password: string }) {
+  return request<{ detail: string }>("/api/auth/me/password/", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function getAdminUsers(query = "", page = 1) {
+  const params = new URLSearchParams({ page: String(page) });
+  if (query.trim()) params.set("q", query.trim());
+  return request<{ count: number; next: string | null; results: AdminUser[] }>(
+    `/api/auth/admin/users/?${params.toString()}`,
+  );
+}
+
+export function updateAdminUser(id: string, input: Partial<Pick<AdminUser, "email" | "display_name" | "is_active">>) {
+  return request<AdminUser>(`/api/auth/admin/users/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateAdminUserScore(userId: string, scoreId: string, input: { score?: number; score_date?: string }) {
+  return request<AdminUser["scores"][number]>(`/api/auth/admin/users/${userId}/scores/${scoreId}/`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteAdminUserScore(userId: string, scoreId: string) {
+  return request<void>(`/api/auth/admin/users/${userId}/scores/${scoreId}/`, { method: "DELETE" });
+}
+
+export function updateAdminSubscription(subscriptionId: string, action: "cancel" | "resume") {
+  return request<{ subscription: AdminUser["subscriptions"][number] }>(
+    `/api/subscriptions/admin/subscriptions/${subscriptionId}/action/`,
+    {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    },
+  );
+}
+
+export function getAdminOverview() {
+  return request<AdminOverview>("/api/auth/admin/overview/");
+}
+
+export function registerAccount(input: {
+  email: string;
+  display_name: string;
+  password: string;
+  charity_id?: string;
+  contribution_bps?: number;
+}) {
   return request<{ user: Account }>("/api/auth/register/", {
     method: "POST",
     body: JSON.stringify(input),
@@ -260,6 +385,10 @@ export function getCharities(query = "") {
   if (query.trim()) params.set("q", query.trim());
   const suffix = params.size ? `?${params.toString()}` : "";
   return request<Charity[]>(`/api/charities/${suffix}`);
+}
+
+export function getCharity(slug: string) {
+  return request<Charity>(`/api/charities/${encodeURIComponent(slug)}/`);
 }
 
 export function getCharitySelection() {
@@ -315,6 +444,17 @@ export function cancelMySubscription() {
   return request<{ subscription: MemberSubscription }>("/api/subscriptions/me/cancel/", { method: "POST" });
 }
 
+export function resumeMySubscription() {
+  return request<{ subscription: MemberSubscription }>("/api/subscriptions/me/resume/", { method: "POST" });
+}
+
+export function changeMySubscriptionPlan(planId: string) {
+  return request<{ subscription: MemberSubscription }>("/api/subscriptions/me/change-plan/", {
+    method: "POST",
+    body: JSON.stringify({ plan_id: planId }),
+  });
+}
+
 export function createCheckoutSession(interval: SubscriptionPlan["interval"]) {
   return request<{ checkout_url: string }>("/api/subscriptions/checkout/", {
     method: "POST",
@@ -350,6 +490,21 @@ export function getPublicDraws() {
   return request<DrawRecord[]>("/api/draws/");
 }
 
+export function getMyDrawSummary() {
+  return request<MemberDrawSummary>("/api/draws/me/summary/");
+}
+
+export function getDonationConfig() {
+  return request<DonationConfig>("/api/payments/donations/config/");
+}
+
+export function createDonationCheckout(input: { charity_id: string; amount_minor: number }) {
+  return request<{ checkout_url: string }>("/api/payments/donations/checkout/", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export function getAdminDrawConfigurations() {
   return request<DrawConfiguration[]>("/api/draws/admin/configurations/");
 }
@@ -360,6 +515,7 @@ export function createAdminDrawConfiguration(input: {
   candidate_min: number;
   candidate_max: number;
   number_count: number;
+  prize_pool_contribution_bps: number;
   parameters: Record<string, unknown>;
 }) {
   return request<DrawConfiguration>("/api/draws/admin/configurations/", {
@@ -385,6 +541,10 @@ export function createAdminDraw(input: {
 
 export function simulateAdminDraw(id: string) {
   return request<{ run: DrawRun }>(`/api/draws/admin/${id}/simulate/`, { method: "POST" });
+}
+
+export function publishAdminDraw(id: string) {
+  return request<{ run: DrawRun }>(`/api/draws/admin/${id}/publish/`, { method: "POST" });
 }
 
 export function getMyWinners() {

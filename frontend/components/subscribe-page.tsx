@@ -85,7 +85,7 @@ export function SubscribePage({ checkoutCancelled }: { checkoutCancelled: boolea
         {notice && <p className="score-form__message" role="status">{notice}</p>}
         {error && <p className="auth-error" role="alert">{error}</p>}
         {loading ? (
-          <div className="directory-empty"><LoaderCircle className="spin" size={20} /><span>Loading plans…</span></div>
+          <div className="directory-empty" role="status" aria-live="polite"><LoaderCircle className="spin" size={20} /><span>Loading plans…</span></div>
         ) : plans.length ? (
           <div className="plan-grid">
             {[monthly, yearly].filter((plan): plan is SubscriptionPlan => Boolean(plan)).map((plan) => (

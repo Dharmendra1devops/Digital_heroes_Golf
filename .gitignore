@@ -12,6 +12,7 @@ backend/.venv/
 *.log
 *.pot
 *.pyc
+backend/staticfiles/
 
 # Node / Next.js
 frontend/node_modules/

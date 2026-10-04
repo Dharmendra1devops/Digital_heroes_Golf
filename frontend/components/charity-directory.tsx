@@ -41,6 +41,7 @@ export function CharityDirectory() {
         <nav className="public-nav__links" aria-label="Main navigation">
           <Link href="/">How it works</Link>
           <Link href="/#giving">The giving</Link>
+          <Link href="/donate">Donate</Link>
         </nav>
         <div className="public-nav__actions">
           <Link className="nav-sign-in" href="/login">Sign in</Link>
@@ -63,15 +64,15 @@ export function CharityDirectory() {
           <input id="charity-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search charities or causes" />
         </form>
         <div className="directory-filters" role="group" aria-label="Charity filters">
-          <button className={!featuredOnly ? "is-selected" : ""} type="button" onClick={() => setFeaturedOnly(false)}>All causes</button>
-          <button className={featuredOnly ? "is-selected" : ""} type="button" onClick={() => setFeaturedOnly(true)}>Featured</button>
+          <button className={!featuredOnly ? "is-selected" : ""} type="button" aria-pressed={!featuredOnly} onClick={() => setFeaturedOnly(false)}>All causes</button>
+          <button className={featuredOnly ? "is-selected" : ""} type="button" aria-pressed={featuredOnly} onClick={() => setFeaturedOnly(true)}>Featured</button>
         </div>
         <span className="directory-count">{visibleCharities.length} {visibleCharities.length === 1 ? "cause" : "causes"}</span>
       </section>
 
       {error && <p className="directory-error" role="alert">{error}</p>}
       {loading ? (
-        <div className="directory-empty"><LoaderCircle className="spin" size={20} /><span>Finding the causes…</span></div>
+        <div className="directory-empty" role="status" aria-live="polite"><LoaderCircle className="spin" size={20} /><span>Finding the causes…</span></div>
       ) : visibleCharities.length ? (
         <section className="charity-list" aria-label="Charity directory">
           {visibleCharities.map((charity, index) => (
@@ -79,7 +80,7 @@ export function CharityDirectory() {
               <span className="charity-row__number">{String(index + 1).padStart(2, "0")}</span>
               <span className="charity-row__mark"><HeartHandshake size={23} /></span>
               <div className="charity-row__body">
-                <div className="charity-row__title"><h2>{charity.name}</h2>{charity.is_featured && <span>Featured</span>}</div>
+                <div className="charity-row__title"><h2><Link href={`/charities/${encodeURIComponent(charity.slug)}`}>{charity.name}</Link></h2>{charity.is_featured && <span>Featured</span>}</div>
                 <p>{charity.description || "A cause supported by the Digital Heroes community."}</p>
                 {charity.upcoming_events.length > 0 && (
                   <p className="charity-row__event">Next: {charity.upcoming_events[0].title} · {new Intl.DateTimeFormat("en", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(charity.upcoming_events[0].starts_at))}</p>
@@ -87,7 +88,9 @@ export function CharityDirectory() {
               </div>
               <div className="charity-row__actions">
                 {charity.website && <a href={charity.website} target="_blank" rel="noreferrer" aria-label={`Visit ${charity.name} website`} title="Visit charity website"><ExternalLink size={16} /></a>}
+                <Link href={`/charities/${encodeURIComponent(charity.slug)}`} className="text-link">View cause <ArrowRight size={15} /></Link>
                 <Link href="/login" className="text-link">Choose in member space <ArrowRight size={15} /></Link>
+                <Link href={`/donate?charity=${encodeURIComponent(charity.id)}`} className="text-link">Donate directly <ArrowRight size={15} /></Link>
               </div>
             </article>
           ))}
@@ -104,7 +107,7 @@ export function CharityDirectory() {
       <footer className="site-footer">
         <Link className="brand-lockup" href="/"><span className="brand-mark"><HeartHandshake size={18} /></span><span>digital<span className="brand-lockup__light">heroes</span></span></Link>
         <p>Golf that gives back.</p>
-        <div><Link href="/login">Member sign in</Link><span>© Digital Heroes</span></div>
+        <div><Link href="/donate">Donate</Link><Link href="/login">Member sign in</Link><span>© Digital Heroes</span></div>
       </footer>
     </main>
   );

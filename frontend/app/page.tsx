@@ -12,7 +12,9 @@ export default function Home() {
         <nav className="public-nav__links" aria-label="Main navigation">
           <a href="#how-it-works">How it works</a>
           <Link href="/charities">Charities</Link>
+          <Link href="/draws">Draw results</Link>
           <a href="#giving">The giving</a>
+          <Link href="/donate">Donate</Link>
         </nav>
         <div className="public-nav__actions">
           <Link className="nav-sign-in" href="/login">Sign in</Link>
@@ -76,6 +78,7 @@ export default function Home() {
           <h2>A good round<br />goes further.</h2>
           <p>Every subscription sends a minimum of 10% to the charity you choose. Give more whenever you like. Your support is separate from the draw.</p>
           <Link className="text-link text-link--light" href="/register">Find your reason to play <ArrowRight size={17} /></Link>
+          <Link className="text-link text-link--light" href="/donate">Make an independent donation <ArrowRight size={17} /></Link>
         </div>
         <div className="giving-section__stamp" aria-hidden="true"><HeartHandshake size={32} /><span>Play<br />with<br />purpose</span></div>
       </section>
@@ -86,7 +89,7 @@ export default function Home() {
           <span>digital<span className="brand-lockup__light">heroes</span></span>
         </Link>
         <p>Golf that gives back.</p>
-        <div><Link href="/login">Member sign in</Link><span>© Digital Heroes</span></div>
+        <div><Link href="/donate">Donate</Link><Link href="/login">Member sign in</Link><span>© Digital Heroes</span></div>
       </footer>
     </main>
   );

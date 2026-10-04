@@ -1,15 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, ExternalLink, HeartHandshake, LoaderCircle, ShieldCheck, Trophy } from "lucide-react";
+import { ExternalLink, HeartHandshake, LoaderCircle, ShieldCheck, Trophy } from "lucide-react";
 
 import {
   ApiError,
   getAdminPayouts,
   getAdminProofUrl,
   getAdminWinners,
-  getCurrentAccount,
   reviewWinnerProof,
   updateAdminPayout,
   type AdminPayout,
@@ -29,7 +27,6 @@ export function AdminWinners() {
   const [winners, setWinners] = useState<MemberWinner[]>([]);
   const [payouts, setPayouts] = useState<AdminPayout[]>([]);
   const [loading, setLoading] = useState(true);
-  const [authorized, setAuthorized] = useState(false);
   const [tab, setTab] = useState<"verification" | "payouts">("verification");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -45,11 +42,8 @@ export function AdminWinners() {
 
   useEffect(() => {
     let active = true;
-    getCurrentAccount()
-      .then(async ({ user }) => {
-        if (!active || !user.is_admin) return;
-        setAuthorized(true);
-        const [winnerRecords, payoutRecords] = await Promise.all([getAdminWinners(), getAdminPayouts()]);
+    Promise.all([getAdminWinners(), getAdminPayouts()])
+      .then(([winnerRecords, payoutRecords]) => {
         if (!active) return;
         setWinners(winnerRecords);
         setPayouts(payoutRecords);
@@ -108,18 +102,12 @@ export function AdminWinners() {
   }
 
   if (loading) return <main className="dashboard-loading"><div><span className="loading-mark"><HeartHandshake size={18} /></span>Loading winner operations…</div></main>;
-  if (!authorized) return <main className="dashboard-loading"><div className="admin-denied"><ShieldCheck size={25} /><h1>Administrator access required</h1><p>{error || "This area is limited to staff accounts."}</p><Link className="button button--forest" href="/dashboard">Return to member space <ArrowRight size={15} /></Link></div></main>;
 
   const pendingWinners = winners.filter((winner) => winner.verification_status !== "approved");
   const pendingPayouts = payouts.filter((payout) => payout.status === "pending");
 
   return (
-    <main className="admin-shell">
-      <header className="admin-topbar">
-        <Link className="brand-lockup" href="/dashboard"><span className="brand-mark"><HeartHandshake size={18} /></span><span>digital<span className="brand-lockup__light">heroes</span></span></Link>
-        <nav><Link href="/admin/draws">Draw operations <ArrowRight size={14} /></Link><Link href="/admin/plans">Membership plans <ArrowRight size={14} /></Link></nav>
-      </header>
-      <section className="admin-content">
+    <>
         <div className="admin-heading"><div><p className="eyebrow">Administrator / rewards</p><h1>Winners & payouts</h1><p>{pendingWinners.length} claims to review · {pendingPayouts.length} pending payouts</p></div><span className="membership-tag membership-tag--active"><ShieldCheck size={14} /> Staff access</span></div>
         {error && <p className="auth-error" role="alert">{error}</p>}
         {message && <p className="score-form__message" role="status">{message}</p>}
@@ -156,7 +144,6 @@ export function AdminWinners() {
             )) : <div className="score-empty"><Trophy size={22} /><p>No payouts recorded.</p></div>}
           </section>
         )}
-      </section>
-    </main>
+    </>
   );
 }

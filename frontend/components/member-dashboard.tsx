@@ -1,34 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 import {
   Activity, ArrowRight, CalendarDays, ChartNoAxesColumnIncreasing, CircleHelp,
-  CreditCard, HeartHandshake, LoaderCircle, LogOut, Plus, ShieldCheck,
+  CreditCard, HeartHandshake, LoaderCircle, Plus, ShieldCheck,
   Trophy, Trash2, Upload, X,
 } from "lucide-react";
 
+import { useMemberAccount } from "@/components/member-workspace";
 import {
   ApiError,
-  cancelMySubscription,
   createScore,
   getCharities,
   getCharitySelection,
-  getCurrentAccount,
+  getMyDrawSummary,
   getMyWinners,
   getMySubscription,
   getScores,
-  logOut,
   removeScore,
   saveCharitySelection,
   uploadWinnerProof,
   updateScore,
-  type Account,
   type Charity,
   type CharitySelection,
   type GolfScore,
   type MemberWinner,
+  type MemberDrawSummary,
   type MemberSubscription,
 } from "@/lib/api";
 
@@ -53,16 +51,32 @@ function displayMoney(amountMinor: number, currency: string) {
   return new Intl.NumberFormat("en", { style: "currency", currency }).format(amountMinor / (10 ** digits));
 }
 
-export function MemberDashboard() {
-  const router = useRouter();
-  const [account, setAccount] = useState<Account | null>(null);
+type MemberDashboardPage = "overview" | "scores" | "causes" | "winnings";
+
+const pageHeadings: Record<Exclude<MemberDashboardPage, "overview">, { eyebrow: string; title: string; description: string }> = {
+  scores: {
+    eyebrow: "Your golf activity",
+    title: "My scorecard",
+    description: "Add, review, and maintain your latest Stableford rounds.",
+  },
+  causes: {
+    eyebrow: "Giving back",
+    title: "My cause",
+    description: "Choose the cause you support and set your contribution preference.",
+  },
+  winnings: {
+    eyebrow: "Your prize history",
+    title: "Winnings & payouts",
+    description: "Review verified prizes, submit proof, and follow payout progress.",
+  },
+};
+
+export function MemberDashboard({ page = "overview" }: { page?: MemberDashboardPage }) {
+  const { account } = useMemberAccount();
   const [subscription, setSubscription] = useState<MemberSubscription | null>(null);
-  const [cancelRenewalConfirm, setCancelRenewalConfirm] = useState(false);
-  const [subscriptionMessage, setSubscriptionMessage] = useState("");
-  const [subscriptionError, setSubscriptionError] = useState("");
-  const [subscriptionBusy, setSubscriptionBusy] = useState(false);
   const [scores, setScores] = useState<GolfScore[]>([]);
   const [winners, setWinners] = useState<MemberWinner[]>([]);
+  const [drawSummary, setDrawSummary] = useState<MemberDrawSummary | null>(null);
   const [proofFiles, setProofFiles] = useState<Record<string, File>>({});
   const [proofBusyId, setProofBusyId] = useState<string | null>(null);
   const [proofError, setProofError] = useState("");
@@ -85,43 +99,64 @@ export function MemberDashboard() {
 
   useEffect(() => {
     let active = true;
-    getCurrentAccount()
-      .then(async ({ user }) => {
-        if (!active) return;
-        setAccount(user);
-        const [directory, selectionResult, winnerRecords, subscriptionResult] = await Promise.all([
-          getCharities(),
-          getCharitySelection(),
-          getMyWinners(),
-          getMySubscription(),
-        ]);
-        if (!active) return;
-        setCharities(directory);
-        setCharitySelection(selectionResult.selection);
-        setWinners(winnerRecords);
-        setSubscription(subscriptionResult.subscription);
-        setSelectedCharityId(selectionResult.selection?.charity.id ?? "");
-        if (selectionResult.selection) {
-          setContributionPercent(String(selectionResult.selection.contribution_bps / 100));
+    async function loadPageData() {
+      try {
+        if (page === "overview") {
+          const [subscriptionResult, memberSummary] = await Promise.all([
+            getMySubscription(),
+            getMyDrawSummary(),
+          ]);
+          if (!active) return;
+          setSubscription(subscriptionResult.subscription);
+          setDrawSummary(memberSummary);
+          if (account.is_subscriber) {
+            const entries = await getScores();
+            if (active) setScores(entries);
+          }
+        } else if (page === "scores") {
+          const subscriptionResult = await getMySubscription();
+          if (!active) return;
+          setSubscription(subscriptionResult.subscription);
+          if (account.is_subscriber) {
+            const entries = await getScores();
+            if (active) setScores(entries);
+          }
+        } else if (page === "causes") {
+          const [directory, selectionResult] = await Promise.all([
+            getCharities(),
+            getCharitySelection(),
+          ]);
+          if (!active) return;
+          setCharities(directory);
+          setCharitySelection(selectionResult.selection);
+          setSelectedCharityId(selectionResult.selection?.charity.id ?? "");
+          if (selectionResult.selection) setContributionPercent(String(selectionResult.selection.contribution_bps / 100));
+        } else {
+          const [winnerRecords, memberSummary] = await Promise.all([
+            getMyWinners(),
+            getMyDrawSummary(),
+          ]);
+          if (!active) return;
+          setWinners(winnerRecords);
+          setDrawSummary(memberSummary);
         }
-        if (user.is_subscriber) {
-          const entries = await getScores();
-          if (active) setScores(entries);
-        }
-      })
-      .catch((error: unknown) => {
+      } catch {
         if (!active) return;
-        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
-          router.replace("/login?next=/dashboard");
-          return;
-        }
         setFormError("We could not load your member space. Please refresh and try again.");
-      })
-      .finally(() => {
+      } finally {
         if (active) setLoading(false);
-      });
+      }
+    }
+    void loadPageData();
     return () => { active = false; };
-  }, [router]);
+  }, [account.is_subscriber, page]);
+
+  useEffect(() => {
+    if (!loading && window.location.hash) {
+      const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+      document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ behavior });
+    }
+  }, [loading]);
 
   async function handleScoreSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -184,22 +219,6 @@ export function MemberDashboard() {
     }
   }
 
-  async function handleCancelRenewal() {
-    setSubscriptionBusy(true);
-    setSubscriptionError("");
-    setSubscriptionMessage("");
-    try {
-      const result = await cancelMySubscription();
-      setSubscription(result.subscription);
-      setCancelRenewalConfirm(false);
-      setSubscriptionMessage("Renewal is cancelled. Your access continues through the current period.");
-    } catch (error) {
-      setSubscriptionError(error instanceof ApiError ? error.message : "Renewal could not be cancelled.");
-    } finally {
-      setSubscriptionBusy(false);
-    }
-  }
-
   function startEditing(score: GolfScore) {
     setEditingId(score.id);
     setScoreDate(score.score_date);
@@ -230,61 +249,66 @@ export function MemberDashboard() {
     }
   }
 
-  async function handleLogout() {
-    try {
-      await logOut();
-    } finally {
-      router.replace("/");
-      router.refresh();
-    }
-  }
-
-  if (loading) {
-    return <main className="dashboard-loading"><div><span className="loading-mark"><HeartHandshake size={18} /></span>Opening your member space…</div></main>;
-  }
-  if (!account) return <main className="dashboard-loading"><p>{formError || "Your member space is unavailable."}</p></main>;
-
   const average = scores.length
     ? (scores.reduce((total, item) => total + item.score, 0) / scores.length).toFixed(1)
     : "—";
   const firstName = account.display_name.trim().split(/\s+/)[0] || account.email.split("@")[0];
 
-  return (
-    <main className="dashboard-shell">
-      <aside className="dashboard-sidebar">
-        <Link className="brand-lockup" href="/">
-          <span className="brand-mark"><HeartHandshake size={18} /></span>
-          <span>digital<span className="brand-lockup__light">heroes</span></span>
-        </Link>
-        <p className="sidebar-label">Member space</p>
-        <nav className="sidebar-nav" aria-label="Member navigation">
-          <a className="is-active" href="#overview"><Activity size={17} /> Overview</a>
-          <a href="#scorecard"><ChartNoAxesColumnIncreasing size={17} /> My scores</a>
-          <a href="#winnings"><Trophy size={17} /> Winnings</a>
-          <a href="#membership"><CreditCard size={17} /> Membership</a>
-          <a href="#charity-choice"><HeartHandshake size={17} /> My cause</a>
-          {account.is_admin && <Link href="/admin/charities"><ShieldCheck size={17} /> Admin</Link>}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="account-mini">
-            <span className="account-avatar" aria-hidden="true">{firstName.slice(0, 1).toUpperCase()}</span>
-            <div className="account-mini__text"><strong>{account.display_name || firstName}</strong><span>{account.email}</span></div>
-          </div>
-          <button className="sidebar-nav__logout" type="button" onClick={handleLogout}><LogOut size={16} /> Sign out</button>
-        </div>
-      </aside>
-
-      <section className="dashboard-main" id="overview">
-        <header className="dashboard-topbar">
-          <div className="breadcrumb">Member space <span>/</span> <strong>Overview</strong></div>
-          <div className="dashboard-topbar__right">
-            <span className={`membership-tag${account.is_subscriber ? " membership-tag--active" : ""}`}>
-              <span className="eyebrow-dot" /> {account.is_subscriber ? "Membership active" : "Membership inactive"}
+  if (loading) {
+    const loadingLabel = {
+      overview: "Loading your overview",
+      scores: "Loading your scorecard",
+      causes: "Loading your cause settings",
+      winnings: "Loading your prize history",
+    }[page];
+    return (
+      <div className="member-overview">
+        {page === "overview" ? (
+          <section className="member-hero">
+            <div className="member-hero__copy">
+              <p className="eyebrow eyebrow--light">Your member space</p>
+              <h1>Good to see you, {firstName}.</h1>
+              <p>Your next round can do a little more. Keep your scores current and your cause close.</p>
+            </div>
+            <span className="member-hero__marker"><HeartHandshake size={36} /></span>
+          </section>
+        ) : (
+          <header className="member-page-heading member-dashboard-page-heading">
+            <div>
+              <p className="eyebrow">{pageHeadings[page].eyebrow}</p>
+              <h1>{pageHeadings[page].title}</h1>
+              <p>{pageHeadings[page].description}</p>
+            </div>
+            <span className="member-heading-icon">
+              {page === "scores" ? <ChartNoAxesColumnIncreasing size={22} /> : page === "causes" ? <HeartHandshake size={22} /> : <Trophy size={22} />}
             </span>
-            <span className="account-avatar" aria-label={account.display_name || account.email}>{firstName.slice(0, 1).toUpperCase()}</span>
+          </header>
+        )}
+        <div className="member-data-loading" role="status" aria-label={loadingLabel}>
+          <span className="member-sr-only">{loadingLabel}</span>
+          <div className="member-data-loading__skeleton" aria-hidden="true">
+            <span /><span /><span />
           </div>
-        </header>
+        </div>
+      </div>
+    );
+  }
 
+  return (
+    <div id="overview" className="member-overview">
+      {page !== "overview" && (
+        <header className="member-page-heading member-dashboard-page-heading">
+          <div>
+            <p className="eyebrow">{pageHeadings[page].eyebrow}</p>
+            <h1>{pageHeadings[page].title}</h1>
+            <p>{pageHeadings[page].description}</p>
+          </div>
+          <span className="member-heading-icon">
+            {page === "scores" ? <ChartNoAxesColumnIncreasing size={22} /> : page === "causes" ? <HeartHandshake size={22} /> : <Trophy size={22} />}
+          </span>
+        </header>
+      )}
+      {page === "overview" && <>
         <section className="member-hero">
           <div className="member-hero__copy">
             <p className="eyebrow eyebrow--light">Your member space</p>
@@ -298,6 +322,25 @@ export function MemberDashboard() {
           <div className="summary-cell"><span>Rounds on record</span><strong>{scores.length} <small>/ 5</small></strong></div>
           <div className="summary-cell"><span>Stableford average</span><strong>{average}</strong></div>
           <div className="summary-cell"><span>Latest round</span><strong>{scores[0] ? displayDate(scores[0].score_date) : "—"}</strong></div>
+          <div className="summary-cell"><span>Draws entered</span><strong>{drawSummary?.draws_entered ?? "—"}</strong></div>
+          <div className="summary-cell"><span>Prize status</span><strong>{drawSummary?.payouts_by_status.filter((item) => item.status === "pending").reduce((total, item) => total + item.count, 0) ?? "—"} <small>pending</small></strong></div>
+        </section>
+
+        <nav className="member-quick-nav" aria-label="Member workspace shortcuts">
+          <Link href="/dashboard/scores"><ChartNoAxesColumnIncreasing size={18} /><span><strong>My scorecard</strong><small>Manage your latest rounds</small></span><ArrowRight size={15} /></Link>
+          <Link href="/dashboard/causes"><HeartHandshake size={18} /><span><strong>My cause</strong><small>Choose where you give back</small></span><ArrowRight size={15} /></Link>
+          <Link href="/dashboard/winnings"><Trophy size={18} /><span><strong>Winnings</strong><small>Review prizes and payouts</small></span><ArrowRight size={15} /></Link>
+        </nav>
+
+        <section className="panel participation-panel" aria-labelledby="participation-heading">
+          <div className="panel-heading"><div><h2 id="participation-heading">Draw participation</h2><p>Upcoming draws and your entry status</p></div><CalendarDays className="panel-kicker" size={17} /></div>
+          <p className="draw-policy-note">Entries are recorded when a draw is simulated. Eligibility requires an active membership and five scores by the draw cutoff.</p>
+          {drawSummary?.upcoming_draws.length ? <div className="score-list">{drawSummary.upcoming_draws.map((draw) => (
+            <div className="score-row" key={draw.id}>
+              <span className="score-row__date">{new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(draw.scheduled_at))}</span>
+              <span className={`draw-status draw-status--${draw.entered ? "published" : "draft"}`}>{draw.entered ? "Entry confirmed" : "Entry not recorded"}</span>
+            </div>
+          ))}</div> : <div className="score-empty"><CalendarDays size={21} /><p>No upcoming draws are scheduled.</p></div>}
         </section>
 
         <section className="panel membership-panel" id="membership">
@@ -306,23 +349,33 @@ export function MemberDashboard() {
             <div><span>Plan</span><strong>{subscription.plan.interval === "monthly" ? "Monthly" : "Yearly"}</strong></div>
             <div><span>Status</span><strong className="membership-status">{subscription.cancel_at_period_end ? "Cancels at period end" : subscription.status}</strong></div>
             <div><span>{subscription.cancel_at_period_end ? "Access through" : "Renews"}</span><strong>{subscription.plan && subscription.current_period_end ? displayDate(subscription.current_period_end.slice(0, 10)) : "—"}</strong></div>
-            {subscription.status === "active" && !subscription.cancel_at_period_end && <div className="membership-actions">
-              {cancelRenewalConfirm ? <div className="inline-confirm"><span>Cancel renewal?</span><button type="button" disabled={subscriptionBusy} onClick={handleCancelRenewal}>{subscriptionBusy ? "Saving…" : "Confirm"}</button><button type="button" onClick={() => setCancelRenewalConfirm(false)}>Keep plan</button></div> : <button className="text-link membership-cancel" type="button" onClick={() => setCancelRenewalConfirm(true)}>Cancel renewal <ArrowRight size={14} /></button>}
-            </div>}
           </div> : <div className="membership-empty"><p>No active plan is linked to this account.</p><Link className="text-link" href="/subscribe">View plans <ArrowRight size={14} /></Link></div>}
-          {subscriptionMessage && <p className="score-form__message" role="status">{subscriptionMessage}</p>}
-          {subscriptionError && <p className="score-form__message score-form__message--error" role="alert">{subscriptionError}</p>}
+          <Link className="text-link member-section-link" href="/dashboard/membership">Manage membership <ArrowRight size={14} /></Link>
         </section>
 
         {!account.is_subscriber && (
-          <section className="gate-banner" id="membership">
+          <section className="gate-banner">
             <CreditCard size={19} />
             <div><h2>An active membership opens score entry and draw participation.</h2><p>Your account is ready. <Link href="/subscribe">View membership plans <ArrowRight size={14} /></Link></p></div>
           </section>
         )}
 
         {formError && !account.is_subscriber && <p className="auth-error" role="alert">{formError}</p>}
+      </>}
 
+      {page === "scores" && <>
+        <section className="summary-strip member-page-summary" aria-label="Score summary">
+          <div className="summary-cell"><span>Rounds on record</span><strong>{scores.length} <small>/ 5</small></strong></div>
+          <div className="summary-cell"><span>Stableford average</span><strong>{average}</strong></div>
+          <div className="summary-cell"><span>Latest round</span><strong>{scores[0] ? displayDate(scores[0].score_date) : "—"}</strong></div>
+        </section>
+        {!account.is_subscriber && (
+          <section className="gate-banner">
+            <CreditCard size={19} />
+            <div><h2>An active membership opens score entry and draw participation.</h2><p>Your account is ready. <Link href="/dashboard/membership">Manage membership <ArrowRight size={14} /></Link></p></div>
+          </section>
+        )}
+        {formError && <p className="auth-error" role="alert">{formError}</p>}
         <section className="dashboard-grid" id="scorecard">
           <div className="panel">
             <div className="panel-heading">
@@ -379,8 +432,9 @@ export function MemberDashboard() {
             )}
           </div>
         </section>
+      </>}
 
-        <section className="panel charity-panel" id="charity-choice">
+      {page === "causes" && <section className="panel charity-panel member-feature-panel" id="charity-choice">
           <div className="panel-heading">
             <div><h2>Your cause</h2><p>At least 10% of your subscription goes to the charity you choose.</p></div>
             {charitySelection && <span className="membership-tag membership-tag--active">Preference saved</span>}
@@ -405,10 +459,11 @@ export function MemberDashboard() {
           ) : (
             <div className="charity-empty"><HeartHandshake size={21} /><p>No active charities are listed yet.</p><Link href="/charities">Browse the directory <ArrowRight size={14} /></Link></div>
           )}
-        </section>
+      </section>}
 
-        <section className="panel winnings-panel" id="winnings">
+      {page === "winnings" && <section className="panel winnings-panel member-feature-panel" id="winnings">
           <div className="panel-heading"><div><h2>Your winnings</h2><p>Verified prizes and payment status</p></div><Trophy className="panel-kicker" size={18} /></div>
+          {drawSummary?.winnings_by_currency.length ? <div className="summary-strip" aria-label="Winnings totals">{drawSummary.winnings_by_currency.map((item) => <div className="summary-cell" key={item.currency}><span>Total awarded · {item.currency}</span><strong>{displayMoney(item.amount_minor, item.currency)}</strong></div>)}</div> : null}
           {proofMessage && <p className="score-form__message" role="status">{proofMessage}</p>}
           {proofError && <p className="score-form__message score-form__message--error" role="alert">{proofError}</p>}
           {winners.length ? <div className="winner-list">{winners.map((winner) => (
@@ -426,10 +481,11 @@ export function MemberDashboard() {
               </form>}
             </article>
           ))}</div> : <div className="score-empty"><Trophy size={21} /><p>No winnings to show yet.</p></div>}
-        </section>
+      </section>}
 
+      {page === "overview" && <>
         <p className="dashboard-footnote"><CircleHelp size={14} /> Need a hand? <Link href="/#how-it-works">See how Digital Heroes works <ArrowRight size={14} /></Link><span className="desktop-only"> · {account.is_admin ? "Administrator account" : "Member account"}</span></p>
-      </section>
-    </main>
+      </>}
+    </div>
   );
 }
