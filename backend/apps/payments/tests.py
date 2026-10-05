@@ -372,3 +372,28 @@ class StripeWebhookTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(StripeWebhookEvent.objects.get(stripe_event_id=event['id']).status, 'succeeded')
         self.assertFalse(Donation.objects.exists())
+
+    @patch('apps.payments.views.stripe.Webhook.construct_event')
+    def test_unrelated_payment_checkout_completion_is_ignored(self, construct_event):
+        event = {
+            'id': 'evt_unrelated_checkout_complete_test',
+            'type': 'checkout.session.completed',
+            'data': {
+                'object': {
+                    'id': 'cs_cli_fixture_test',
+                    'mode': 'payment',
+                },
+            },
+        }
+        construct_event.return_value = event
+        with patch.dict(os.environ, {'STRIPE_WEBHOOK_SECRET': 'whsec_test'}):
+            response = self.client.post(
+                '/api/payments/stripe/webhook/',
+                data=b'{}',
+                content_type='application/json',
+                HTTP_STRIPE_SIGNATURE='t=123,v1=test-signature',
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(StripeWebhookEvent.objects.get(stripe_event_id=event['id']).status, 'succeeded')
+        self.assertFalse(Donation.objects.exists())

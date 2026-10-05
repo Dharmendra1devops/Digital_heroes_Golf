@@ -175,6 +175,8 @@ def _process_invoice(event_type, invoice_data):
 
 def _process_donation_checkout(event_type, session_data):
     donation_id = _field(_field(session_data, 'metadata', {}), 'donation_id')
+    if not donation_id:
+        return
     donation = Donation.objects.select_for_update().filter(pk=donation_id).first()
     if donation is None:
         raise ValueError('Checkout session does not match a donation.')
