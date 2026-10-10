@@ -119,6 +119,7 @@ button { color: inherit; }
 .site-footer > p { margin: 0; color: var(--muted); font-family: var(--font-display); font-size: 20px; }
 .site-footer > div { display: flex; align-items: center; gap: 23px; color: var(--muted); font-size: 12px; }
 .site-footer > div a { color: var(--forest); font-weight: 700; }
+.home-release-marker { color: var(--forest); font-family: monospace; font-size: 10px; white-space: nowrap; }
 
 .directory-page { min-height: 100vh; background: var(--paper); }
 .directory-hero { min-height: 300px; display: grid; grid-template-columns: 1fr .7fr; align-items: end; gap: 8vw; padding: 62px 10vw 51px; color: white; background: var(--forest); }
@@ -635,6 +636,8 @@ button { color: inherit; }
   .giving-section__stamp span { font-size: 8px; }
   .site-footer { align-items: flex-start; flex-direction: column; padding: 25px 24px; }
   .site-footer > div { width: 100%; justify-content: space-between; }
+  .home-page .site-footer > div { flex-wrap: wrap; justify-content: flex-start; gap: 10px 16px; }
+  .home-page .home-release-marker { flex-basis: 100%; }
   .directory-hero { min-height: 280px; grid-template-columns: 1fr; align-items: end; gap: 16px; padding: 40px 24px 30px; }
   .directory-hero h1 { font-size: 51px; }
   .directory-hero__copy { margin: 0; font-size: 13px; }

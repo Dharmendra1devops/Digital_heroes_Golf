@@ -89,7 +89,12 @@ export default function Home() {
           <span>digital<span className="brand-lockup__light">heroes</span></span>
         </Link>
         <p>Golf that gives back.</p>
-        <div><Link href="/donate">Donate</Link><Link href="/login">Member sign in</Link><span>© Digital Heroes</span></div>
+        <div>
+          <Link href="/donate">Donate</Link>
+          <Link href="/login">Member sign in</Link>
+          <span>© Digital Heroes</span>
+          <span className="home-release-marker">DKID-101020261000PM</span>
+        </div>
       </footer>
     </main>
   );
