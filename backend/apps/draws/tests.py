@@ -113,6 +113,17 @@ class DrawSimulationTests(TestCase):
         self.assertEqual(DrawEntry.objects.filter(draw=self.draw).count(), 0)
         self.assertFalse(DrawRun.objects.filter(draw=self.draw).exists())
 
+    def test_paid_invoice_after_cutoff_does_not_qualify_member(self):
+        invoice = SubscriptionInvoice.objects.get(stripe_invoice_id='in_draw_test')
+        invoice.paid_at = self.draw.eligibility_cutoff + timedelta(seconds=1)
+        invoice.save(update_fields=('paid_at', 'updated_at'))
+
+        with self.assertRaises(ValidationError):
+            simulate_draw(self.draw.pk, seed='invoice-paid-after-cutoff')
+
+        self.assertFalse(DrawEntry.objects.filter(draw=self.draw, user=self.user).exists())
+        self.assertFalse(DrawRun.objects.filter(draw=self.draw).exists())
+
     def test_algorithmic_simulation_uses_versioned_weighted_strategy(self):
         self.configuration.mode = DrawConfiguration.Mode.ALGORITHMIC
         self.configuration.save(update_fields=('mode', 'updated_at'))
@@ -197,6 +208,16 @@ class DrawSimulationTests(TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()['run']['run_type'], DrawRun.RunType.SIMULATION)
+        self.assertEqual(len(response.json()['run']['result_snapshot']['winning_numbers']), 5)
+
+        refreshed_draw = next(
+            item for item in self.client.get('/api/draws/admin/').json()
+            if item['id'] == str(self.draw.pk)
+        )
+        self.assertEqual(
+            refreshed_draw['simulation_run']['result_snapshot']['winning_numbers'],
+            response.json()['run']['result_snapshot']['winning_numbers'],
+        )
         self.assertFalse(DrawWinner.objects.exists())
 
     def test_admin_can_publish_a_simulated_draw(self):

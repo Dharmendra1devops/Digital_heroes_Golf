@@ -81,7 +81,7 @@ The Next.js admin pages and Django admin share the path `/admin` but use differe
 
 1. Register and, when the directory has active causes, choose a cause and contribution percentage. The default contribution is 10%; the selection can be changed later from the dashboard.
 2. View available monthly/yearly plans at `/subscribe`. Checkout redirects to Stripe only when a valid Stripe secret and matching active Stripe Price ID have been configured.
-3. After Stripe confirms the subscription through a signed webhook, an active subscriber can add scores in `/dashboard`. A newer score keeps the five most recent dates; duplicate dates update the existing score.
+3. After Stripe confirms the subscription through a signed webhook, an active subscriber can add scores in `/dashboard`. A newer score keeps the five most recent dates; submitting a date already on the scorecard is rejected, and existing scores can be changed with the edit action.
 4. Review or change a charity and contribution percentage in the member space. The allowed range is 10%-100%; earlier selections remain in history.
 5. Draw results and winnings appear only when real draw/winner records exist. Simulation results are not published results.
 6. A winner can upload their own JPEG, PNG, or WebP proof image (maximum 10 MB). The bucket is private; an administrator reviews it.

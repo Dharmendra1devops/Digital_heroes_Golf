@@ -60,6 +60,11 @@ export function AdminDraws() {
         if (!active) return;
         setConfigurations(configurationList);
         setDraws(drawList);
+        setRuns(Object.fromEntries(
+          drawList.flatMap((draw) => draw.simulation_run
+            ? [[draw.id, draw.simulation_run] as const]
+            : []),
+        ));
         setConfigurationId(configurationList[0]?.id ?? "");
         setScheduledAt(dateTimeLocalAfter(7));
         setEligibilityCutoff(dateTimeLocalAfter(6));

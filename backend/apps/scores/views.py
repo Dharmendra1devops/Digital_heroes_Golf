@@ -34,7 +34,7 @@ class ScoreAccessView(APIView):
         return Response(
             {
                 'code': 'subscription_required',
-                'detail': 'An active subscription is required to manage golf scores.',
+                'detail': 'To enter a golf score, please purchase a subscription plan.',
             },
             status=status.HTTP_403_FORBIDDEN,
         )
@@ -59,6 +59,7 @@ class ScoreListCreateView(ScoreAccessView):
                 request.user,
                 serializer.validated_data['score_date'],
                 serializer.validated_data['score'],
+                allow_update=False,
             )
         except DjangoValidationError as error:
             return Response(validation_error_payload(error), status=status.HTTP_400_BAD_REQUEST)

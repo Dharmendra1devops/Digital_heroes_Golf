@@ -372,12 +372,12 @@ export function MemberDashboard({ page = "overview" }: { page?: MemberDashboardP
         {!account.is_subscriber && (
           <section className="gate-banner">
             <CreditCard size={19} />
-            <div><h2>An active membership opens score entry and draw participation.</h2><p>Your account is ready. <Link href="/dashboard/membership">Manage membership <ArrowRight size={14} /></Link></p></div>
+            <div><h2>To enter a golf score, please purchase a subscription plan.</h2><p><Link href="/subscribe">View subscription plans <ArrowRight size={14} /></Link></p></div>
           </section>
         )}
         {formError && <p className="auth-error" role="alert">{formError}</p>}
         <section className="dashboard-grid" id="scorecard">
-          <div className="panel">
+          {account.is_subscriber && <div className="panel">
             <div className="panel-heading">
               <div><h2>{editingId ? "Edit this round" : "Add a round"}</h2><p>Stableford format · 1 to 45</p></div>
               {editingId ? <button className="icon-action" type="button" onClick={cancelEditing} title="Cancel edit" aria-label="Cancel edit"><X size={17} /></button> : <Plus className="panel-kicker" size={17} />}
@@ -400,7 +400,7 @@ export function MemberDashboard({ page = "overview" }: { page?: MemberDashboardP
               {formMessage && <p className="score-form__message" role="status">{formMessage}</p>}
               {formError && account.is_subscriber && <p className="score-form__message score-form__message--error" role="alert">{formError}</p>}
             </form>
-          </div>
+          </div>}
 
           <div className="panel">
             <div className="panel-heading">

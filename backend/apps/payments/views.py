@@ -355,6 +355,7 @@ class DonationCheckoutView(APIView):
                 idempotency_key=f'digital-heroes-donation-{donation.pk}',
             )
         except stripe.StripeError:
+            logger.exception('Stripe donation checkout session could not be created.')
             donation.status = Donation.Status.FAILED
             donation.save(update_fields=('status', 'updated_at'))
             return Response(

@@ -10,11 +10,20 @@ from apps.scores.models import GolfScore
 
 
 @transaction.atomic
-def save_golf_score(user: AbstractBaseUser, score_date: date, score: int) -> GolfScore:
+def save_golf_score(
+    user: AbstractBaseUser,
+    score_date: date,
+    score: int,
+    *,
+    allow_update: bool = True,
+) -> GolfScore:
     if not 1 <= score <= 45:
         raise ValidationError({'score': 'Stableford scores must be between 1 and 45.'})
 
     locked_user = get_user_model().objects.select_for_update().get(pk=user.pk)
+    if not allow_update and GolfScore.objects.filter(user=locked_user, score_date=score_date).exists():
+        raise ValidationError({'score_date': 'A score has already been entered for this date.'})
+
     score_record, _created = GolfScore.objects.update_or_create(
         user=locked_user,
         score_date=score_date,

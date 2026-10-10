@@ -112,11 +112,43 @@ class ScoreApiTests(TestCase):
         self.assertEqual(deleted.status_code, 204)
         self.assertFalse(GolfScore.objects.filter(user=self.user).exists())
 
+    def test_api_rejects_duplicate_score_date_instead_of_reporting_added(self):
+        score_date = date(2026, 10, 1)
+        save_golf_score(self.user, score_date, 34)
+
+        response = self.client.post(
+            '/api/scores/',
+            {'score_date': score_date.isoformat(), 'score': 42},
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()['score_date'],
+            ['A score has already been entered for this date.'],
+        )
+        self.assertEqual(
+            list(GolfScore.objects.filter(user=self.user).values_list('score', flat=True)),
+            [34],
+        )
+
     def test_score_api_requires_an_active_subscription(self):
         Subscription.objects.update(status=Subscription.Status.CANCELED)
         response = self.client.get('/api/scores/')
+        submission = self.client.post(
+            '/api/scores/',
+            {'score_date': '2026-10-01', 'score': 34},
+            content_type='application/json',
+        )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()['code'], 'subscription_required')
+        self.assertEqual(
+            response.json()['detail'],
+            'To enter a golf score, please purchase a subscription plan.',
+        )
+        self.assertEqual(submission.status_code, 403)
+        self.assertEqual(submission.json()['code'], 'subscription_required')
+        self.assertFalse(GolfScore.objects.filter(user=self.user).exists())
 
     def test_api_creation_applies_the_rolling_five_rule(self):
         for day in range(1, 7):

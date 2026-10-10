@@ -86,6 +86,7 @@ export type DrawRecord = {
   configuration_snapshot: Record<string, unknown>;
   published_at: string | null;
   winning_numbers: number[];
+  simulation_run?: DrawRun | null;
   prize_pools: Array<{
     match_count: number;
     share_bps: number;

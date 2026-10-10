@@ -93,6 +93,20 @@ class DrawSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'status', 'configuration_snapshot', 'published_at', 'created_at')
 
 
+class AdminDrawSerializer(DrawSerializer):
+    simulation_run = serializers.SerializerMethodField()
+
+    def get_simulation_run(self, draw):
+        run = next(
+            (run for run in draw.runs.all() if run.run_type == DrawRun.RunType.SIMULATION),
+            None,
+        )
+        return DrawRunSerializer(run).data if run is not None else None
+
+    class Meta(DrawSerializer.Meta):
+        fields = (*DrawSerializer.Meta.fields, 'simulation_run')
+
+
 class DrawRunSerializer(serializers.ModelSerializer):
     class Meta:
         model = DrawRun

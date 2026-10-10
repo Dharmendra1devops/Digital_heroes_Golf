@@ -7,7 +7,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.draws.models import Draw, DrawConfiguration, DrawEntry, DrawRun
-from apps.draws.serializers import DrawConfigurationSerializer, DrawRunSerializer, DrawSerializer
+from apps.draws.serializers import (
+    AdminDrawSerializer,
+    DrawConfigurationSerializer,
+    DrawRunSerializer,
+    DrawSerializer,
+)
 from apps.draws.services import publish_draw, simulate_draw
 from apps.winners.models import DrawWinner, Payout
 
@@ -80,14 +85,14 @@ class AdminDrawConfigurationListCreateView(generics.ListCreateAPIView):
 
 
 class AdminDrawListCreateView(generics.ListCreateAPIView):
-    published_runs = DrawRun.objects.filter(is_published=True).prefetch_related('winning_numbers')
+    runs = DrawRun.objects.prefetch_related('winning_numbers').order_by('-run_number')
     queryset = (
         Draw.objects.select_related('configuration')
-        .prefetch_related(Prefetch('runs', queryset=published_runs), 'tier_pools')
+        .prefetch_related(Prefetch('runs', queryset=runs), 'tier_pools')
         .all()
         .order_by('-scheduled_at')
     )
-    serializer_class = DrawSerializer
+    serializer_class = AdminDrawSerializer
     permission_classes = [permissions.IsAdminUser]
 
 
